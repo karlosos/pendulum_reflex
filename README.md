@@ -16,6 +16,8 @@ pip install -r requirements.txt
 python main.py
 ```
 
+![https://i.imgur.com/CaojN8Y.gifv](https://i.imgur.com/CaojN8Y.gif)
+
 ## Contributing
 Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
 

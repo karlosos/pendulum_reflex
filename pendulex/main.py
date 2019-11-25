@@ -6,11 +6,13 @@ import numpy as np
 from pendulex.simulation import pendulum
 from pendulex import gui
 from pendulex import trigger_object
+from pendulex import score_board
 
 
 class Game:
     def __init__(self):
         self.p = pendulum.Pendulum()
+        self.score_board = score_board.ScoreBoard()
         self.clock = pygame.time.Clock()
         self.display = gui.display.Display(self)
         x, y, steps = self.p.simulate()
@@ -45,11 +47,11 @@ class Game:
                 self.game()
             elif self.game_state == 2:
                 self.events_end_game()
-                self.display.show_end_game()
+                self.display.show_end_game(self.score_board.get_score_board_full())
             self.clock.tick(60)
 
     def menu(self):
-        self.display.show_menu(self.player_name)
+        self.display.show_menu(self.player_name, self.score_board.get_score_board_full())
 
     def game(self):
         if self.i < len(self.simulation["steps"]) - 1:
@@ -67,9 +69,14 @@ class Game:
                 self.intensity += o.action()
 
         self.score += self.intensity
-        self.display.show(x, y, self.intensity, round(self.score / self.tours, 2))
-        if self.tours > 2:
+        self.display.show(x, y, self.intensity, self.normalized_score(), self.player_name,
+                          self.score_board.get_score_board_split(self.normalized_score()))
+        if self.tours > 7:
             self.game_state = 2
+            self.score_board.add_score(self.player_name, self.normalized_score())
+
+    def normalized_score(self):
+        return round(self.score / self.tours, 2)
 
     def reset_time(self):
         self.i = 0
@@ -102,12 +109,14 @@ class Game:
         if self.intensity > 0:
             self.intensity = 0
         else:
-            self.score += 10
+            theta = self.simulation["theta"][self.i]
+            if -1.10 < theta < 1.10:
+                self.score += 10
 
     def events_game(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                sys.exit()
+                self.teardown()
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
                     self.player_action()
@@ -115,7 +124,7 @@ class Game:
     def events_menu(self):
         for evt in pygame.event.get():
             if evt.type == pygame.QUIT:
-                sys.exit()
+                self.teardown()
 
             if evt.type == pygame.KEYDOWN:
                 if evt.unicode.isalpha():
@@ -133,11 +142,16 @@ class Game:
     def events_end_game(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                sys.exit()
+                self.teardown()
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_RETURN:
                     self.game_state = 0
                     self.clear_game()
+
+    def teardown(self):
+        self.score_board.save_scores()
+        sys.exit()
+
 
 if __name__ == '__main__':
     game = Game()
