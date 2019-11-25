@@ -1,52 +1,144 @@
-import sys
 import pygame
+import sys
+import random
+import numpy as np
 
-from pendulex import pendulum
+from pendulex.simulation import pendulum
+from pendulex import gui
+from pendulex import trigger_object
 
-pygame.init()
 
-size = width, height = 800, 600
-speed = [2, 2]
-black = 0, 0, 0
+class Game:
+    def __init__(self):
+        self.p = pendulum.Pendulum()
+        self.clock = pygame.time.Clock()
+        self.display = gui.display.Display(self)
+        x, y, steps = self.p.simulate()
+        self.simulation = {"x": x, "y": y, "theta": self.p.theta1, "steps": steps}
 
-screen = pygame.display.set_mode(size)
+        self.i = 0
+        self.moving_right = False
+        self.objects_list = []
+        self.intensity = 0
+        self.score = 0
+        self.tours = 1
+        self.game_state = 0
+        self.player_name = ""
 
-p = pendulum.Pendulum()
-x, y, steps = p.simulate()
+    def clear_game(self):
+        self.i = 0
+        self.moving_right = False
+        self.objects_list = []
+        self.intensity = 0
+        self.score = 0
+        self.tours = 1
+        self.game_state = 0
+        self.player_name = ""
 
-i = 0
+    def loop(self):
+        while 1:
+            if self.game_state == 0:
+                self.events_menu()
+                self.menu()
+            elif self.game_state == 1:
+                self.events_game()
+                self.game()
+            elif self.game_state == 2:
+                self.events_end_game()
+                self.display.show_end_game()
+            self.clock.tick(60)
 
-clock = pygame.time.Clock()
+    def menu(self):
+        self.display.show_menu(self.player_name)
 
-while 1:
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            sys.exit()
-        elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_SPACE:
-                i = 1
+    def game(self):
+        if self.i < len(self.simulation["steps"]) - 1:
+            self.i += 1
 
-    if i < len(steps) - 1:
-        i += 1
+        self.check_angle_activation()
+        x = self.simulation["x"][self.i]
+        y = self.simulation["y"][self.i]
+        theta = self.simulation["theta"][self.i]
 
-    magnifier = 100
-    offset_x = 400
-    offset_y = 40
+        for o in self.objects_list:
+            if theta < o.theta and self.moving_right:
+                self.intensity += o.action()
+            elif theta > o.theta and not self.moving_right:
+                self.intensity += o.action()
 
-    current_x = magnifier * (x[i]) + offset_x
-    current_x = int(current_x)
-    current_y = magnifier * (-y[i]) + offset_y
-    current_y = int(current_y)
+        self.score += self.intensity
+        self.display.show(x, y, self.intensity, round(self.score / self.tours, 2))
+        if self.tours > 2:
+            self.game_state = 2
 
-    start_x = offset_x
-    start_y = offset_y
+    def reset_time(self):
+        self.i = 0
 
-    background = pygame.Surface(screen.get_size())
-    background.fill((255, 255, 255))
-    screen.blit(background, (0, 0))
+    def check_angle_activation(self):
+        theta = self.simulation["theta"][self.i]
+        if theta > 1.10 and not self.moving_right:
+            self.tours += 1
+            self.moving_right = not self.moving_right
+            self.clear_trigger_objects()
+            self.generate_trigger_objects()
+        if theta < -1.10 and self.moving_right:
+            self.tours += 1
+            self.moving_right = not self.moving_right
+            self.clear_trigger_objects()
+            self.generate_trigger_objects()
 
-    pygame.draw.circle(screen, (255, 0, 0), (current_x, current_y), 20)
-    pygame.draw.line(screen, (255, 0, 0), (start_x, start_y), (current_x, current_y), 1)
-    pygame.display.flip()
-    clock.tick(60)
-    print(clock.get_fps())
+    def generate_trigger_objects(self):
+        random_thetas = random.sample(range(-90, 90, 20), 3)
+        random_thetas = np.array(random_thetas)/100
+        for theta in random_thetas:
+            self.objects_list.append(trigger_object.TriggerObject(theta))
+
+    def clear_trigger_objects(self):
+        print("Clearing objects and adding penalty")
+        self.intensity = 0
+        self.objects_list = []
+
+    def player_action(self):
+        if self.intensity > 0:
+            self.intensity = 0
+        else:
+            self.score += 10
+
+    def events_game(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                sys.exit()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    self.player_action()
+
+    def events_menu(self):
+        for evt in pygame.event.get():
+            if evt.type == pygame.QUIT:
+                sys.exit()
+
+            if evt.type == pygame.KEYDOWN:
+                if evt.unicode.isalpha():
+                    if len(self.player_name) < 5:
+                        self.player_name += evt.unicode
+                    else:
+                        new_name = list(self.player_name)
+                        new_name[4] = evt.unicode
+                        self.player_name = ''.join(new_name)
+                elif evt.key == pygame.K_BACKSPACE:
+                    self.player_name = self.player_name[:-1]
+                elif evt.key == pygame.K_RETURN:
+                    self.game_state = 1
+
+    def events_end_game(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                sys.exit()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    self.game_state = 0
+                    self.clear_game()
+
+if __name__ == '__main__':
+    game = Game()
+    game.loop()
